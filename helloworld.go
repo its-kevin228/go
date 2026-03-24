@@ -14,6 +14,12 @@ type Book struct {
 	Pages  int    `json:"pages"`
 }
 
+type createBookRequest struct {
+	Title  string `json:"title"`
+	Author string `json:"author"`
+	Pages  int    `json:"pages"`
+}
+
 var books = []Book{
 	{ID: 1, Title: "1984", Author: "George Orwell", Pages: 328},
 	{ID: 2, Title: "Le Petit Prince", Author: "Antoine de Saint-Exupery", Pages: 96},
@@ -90,17 +96,97 @@ func apiStatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func apiBooksHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Méthode non autorisée", http.StatusMethodNotAllowed)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 
-	err := json.NewEncoder(w).Encode(books)
-	if err != nil {
-		http.Error(w, "Erreur lors de l'encodage JSON", http.StatusInternalServerError)
-		return
+	switch r.Method {
+	case http.MethodGet:
+		idParam := r.URL.Query().Get("id")
+		if idParam == "" {
+			err := json.NewEncoder(w).Encode(books)
+			if err != nil {
+				http.Error(w, "Erreur lors de l'encodage JSON", http.StatusInternalServerError)
+			}
+			return
+		}
+
+		id, err := strconv.Atoi(idParam)
+		if err != nil {
+			http.Error(w, "Le paramètre 'id' doit être un nombre", http.StatusBadRequest)
+			return
+		}
+
+		for _, book := range books {
+			if book.ID == id {
+				err = json.NewEncoder(w).Encode(book)
+				if err != nil {
+					http.Error(w, "Erreur lors de l'encodage JSON", http.StatusInternalServerError)
+				}
+				return
+			}
+		}
+
+		http.Error(w, "Livre introuvable", http.StatusNotFound)
+
+	case http.MethodPost:
+		var payload createBookRequest
+		err := json.NewDecoder(r.Body).Decode(&payload)
+		if err != nil {
+			http.Error(w, "JSON invalide", http.StatusBadRequest)
+			return
+		}
+
+		if payload.Title == "" || payload.Author == "" || payload.Pages <= 0 {
+			http.Error(w, "title, author et pages sont obligatoires", http.StatusBadRequest)
+			return
+		}
+
+		newBook := Book{
+			ID:     len(books) + 1,
+			Title:  payload.Title,
+			Author: payload.Author,
+			Pages:  payload.Pages,
+		}
+
+		books = append(books, newBook)
+		w.WriteHeader(http.StatusCreated)
+		err = json.NewEncoder(w).Encode(newBook)
+		if err != nil {
+			http.Error(w, "Erreur lors de l'encodage JSON", http.StatusInternalServerError)
+			return
+		}
+
+	case http.MethodDelete:
+		idParam := r.URL.Query().Get("id")
+		if idParam == "" {
+			http.Error(w, "Le paramètre 'id' est obligatoire", http.StatusBadRequest)
+			return
+		}
+
+		id, err := strconv.Atoi(idParam)
+		if err != nil {
+			http.Error(w, "Le paramètre 'id' doit être un nombre", http.StatusBadRequest)
+			return
+		}
+
+		for index, book := range books {
+			if book.ID == id {
+				books = append(books[:index], books[index+1:]...)
+				response := map[string]string{
+					"status":  "ok",
+					"message": "Livre supprimé",
+				}
+				err = json.NewEncoder(w).Encode(response)
+				if err != nil {
+					http.Error(w, "Erreur lors de l'encodage JSON", http.StatusInternalServerError)
+				}
+				return
+			}
+		}
+
+		http.Error(w, "Livre introuvable", http.StatusNotFound)
+
+	default:
+		http.Error(w, "Méthode non autorisée", http.StatusMethodNotAllowed)
 	}
 }
 
