@@ -185,6 +185,51 @@ func apiBooksHandler(w http.ResponseWriter, r *http.Request) {
 
 		http.Error(w, "Livre introuvable", http.StatusNotFound)
 
+	case http.MethodPut:
+		idParam := r.URL.Query().Get("id")
+		if idParam == "" {
+			http.Error(w, "Le paramètre 'id' est obligatoire", http.StatusBadRequest)
+			return
+		}
+
+		id, err := strconv.Atoi(idParam)
+		if err != nil {
+			http.Error(w, "Le paramètre 'id' doit être un nombre", http.StatusBadRequest)
+			return
+		}
+
+		var payload createBookRequest
+		err = json.NewDecoder(r.Body).Decode(&payload)
+		if err != nil {
+			http.Error(w, "JSON invalide", http.StatusBadRequest)
+			return
+		}
+
+		if payload.Title == "" || payload.Author == "" || payload.Pages <= 0 {
+			http.Error(w, "title, author et pages sont obligatoires", http.StatusBadRequest)
+			return
+		}
+
+		for index, book := range books {
+			if book.ID == id {
+				updatedBook := Book{
+					ID:     book.ID,
+					Title:  payload.Title,
+					Author: payload.Author,
+					Pages:  payload.Pages,
+				}
+
+				books[index] = updatedBook
+				err = json.NewEncoder(w).Encode(updatedBook)
+				if err != nil {
+					http.Error(w, "Erreur lors de l'encodage JSON", http.StatusInternalServerError)
+				}
+				return
+			}
+		}
+
+		http.Error(w, "Livre introuvable", http.StatusNotFound)
+
 	default:
 		http.Error(w, "Méthode non autorisée", http.StatusMethodNotAllowed)
 	}
